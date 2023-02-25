@@ -1,107 +1,164 @@
-import React, { useCallback } from 'react';
-import Particles from "react-tsparticles";
-import { loadFull } from "tsparticles";
+import React, { Component } from 'react';
+import ParticlesBg from 'particles-bg'
 import './App.css';
+import Clarifai from 'clarifai';
 import Navigation from './components/Navigation/Navigation';
+import FaceRecognition from './components/FaceRecognition/FaceRecognition';
+import Register from './components/Register/Register';
 import Logo from './components/Logo/Logo';
 import ImageLinkForm from './components/ImageLinkForm/ImageLinkForm'
 import Rank from './components/Rank/Rank';
+import SignIn from './components/SignIn/SignIn';
 
+const app = new Clarifai.App({
+	apiKey: 'fc0c7f5630c2462db0739a5998abe9bb'
+});
 
-const App = () => {
-  const particlesInit = useCallback(async engine => {
-    console.log(engine);
-    // you can initiate the tsParticles instance (engine) here, adding custom shapes or presets
-    // this loads the tsparticles package bundle, it's the easiest method for getting everything ready
-    // starting from v2 you can add only the features you need reducing the bundle size
-    await loadFull(engine);
-  }, []);
+class App extends Component {
+	constructor() {
+		super();
+		this.state = {
+			input: '',
+			imageURL: '',
+			box: {},
+			route: 'signin',
+			isSignedIn: false,
 
-  const particlesLoaded = useCallback(async container => {
-    await console.log(container);
-  }, []);
-    return (
-      <div className="tc App">
-        <Particles className='particles'
-            id="tsparticles"
-            init={particlesInit}
-            loaded={particlesLoaded}
-            options={{
-                fpsLimit: 60,
-                interactivity: {
-                    events: {
-                        onClick: {
-                            enable: true,
-                            mode: "push",
-                        },
-                        onHover: {
-                            enable: false,
-                            mode: "repulse",
-                        },
-                        resize: true,
-                    },
-                    modes: {
-                        push: {
-                            quantity: 3,
-                        }//,
-                        // repulse: {
-                        //     distance: 200,
-                        //     duration: 0.4,
-                        // },
-                    },
-                },
-                particles: {
-                    color: {
-                        value: "#ffffff",
-                    },
-                    links: {
-                        color: "#ffffff",
-                        distance: 150,
-                        enable: true,
-                        opacity: 0.5,
-                        width: .5,
-                    },
-                    collisions: {
-                        enable: false,
-                    },
-                    move: {
-                        directions: "none",
-                        enable: true,
-                        outModes: {
-                            default: "bounce",
-                        },
-                        random: false,
-                        speed: 4,
-                        straight: false,
-                    },
-                    number: {
-                        density: {
-                            enable: true,
-                            area: 600,
-                        },
-                        value: 160,
-                    },
-                    opacity: {
-                        value: 0.5,
-                    },
-                    shape: {
-                        type: "square",
-                    },
-                    size: {
-                        value: { min: 1, max: 3 },
-                    },
-                },
-                detectRetina: true,
-            }}
-        />
-        <Navigation />
-        <Logo /> 
-        <Rank />
-        <ImageLinkForm />
-        {/* <FaceRecognition/> */}
-      </div>
-    );
-  
+		}
+	}
+
+	calculateFaceLocation = (data) => {
+		const clarifaiFace = data.outputs[0].data.regions[0].region_info.bounding_box;
+		const image = document.getElementById('inputImage');
+		const width = Number(image.width);
+		const height = Number(image.height);
+		return {
+			leftCol: clarifaiFace.left_col * width,
+			rightCol: width - (clarifaiFace.right_col * width),
+			topRow: clarifaiFace.top_row * height,
+			bottomRow: height - (clarifaiFace.bottom_row * height)
+		}
+	}
+
+	displayFaceBox = (box) => {
+		console.log(box);
+		this.setState({box: box});
+
+	}
+
+	onInputChange = (event) => {
+		  this.setState({input:event.target.value});
+	}
+
+	onButtonSubmit = () => {
+		 this.setState({imageURL: this.state.input})
+		//  let r = '';
+		 app.models
+      		.predict(
+			{
+			id: 'face-detection',
+			name: 'face-detection',
+			version: '6dc7e46bc9124c5c8824be4822abe105',
+			type: 'visual-detector',
+			}, this.state.input)
+
+			 ///////////////////////////////////////////////////////////////////////////////////////////////////
+		// In this section, we set the user authentication, user and app ID, model details, and the URL
+		// of the image we want as an input. Change these strings to run your own example.
+		//////////////////////////////////////////////////////////////////////////////////////////////////
+
+		// Your PAT (Personal Access Token) can be found in the portal under Authentification
+		const PAT = '2ff45b2a47f34be1ac970a9c02387f6c';
+		// Specify the correct user_id/app_id pairings
+		// Since you're making inferences outside your app's scope
+		const USER_ID = 'clops_4141';       
+		const APP_ID = 'RecognitionBrain';
+		// Change these to whatever model and image URL you want to use
+		const MODEL_ID = 'face-detection';
+		// const MODEL_VERSION_ID = '45fb9a671625463fa646c3523a3087d5';    
+		const IMAGE_URL = this.state.input;
+
+		///////////////////////////////////////////////////////////////////////////////////
+		// YOU DO NOT NEED TO CHANGE ANYTHING BELOW THIS LINE TO RUN THIS EXAMPLE
+		///////////////////////////////////////////////////////////////////////////////////
+
+		const raw = JSON.stringify({
+			"user_app_id": {
+				"user_id": USER_ID,
+				"app_id": APP_ID
+			},
+			"inputs": [
+				{
+					"data": {
+						"image": {
+							"url": IMAGE_URL
+						}
+					}
+				}
+			]
+		});
+
+		const requestOptions = {
+			method: 'POST',
+			headers: {
+				'Accept': 'application/json',
+				'Authorization': 'Key ' + PAT
+			},
+			body: raw
+			
+		};
+
+		// NOTE: MODEL_VERSION_ID is optional, you can also call prediction with the MODEL_ID only
+		// https://api.clarifai.com/v2/models/{YOUR_MODEL_ID}/outputs
+		// this will default to the latest version_id
+
+		fetch("https://api.clarifai.com/v2/models/" + MODEL_ID + "/outputs", requestOptions)
+			.then(response => response.json())
+			.then(result => {
+				//JSON.stringify(result.outputs[0].data.regions[0].region_info.bounding_box
+				this.displayFaceBox(this.calculateFaceLocation(result));
+			}).catch(error => console.log('error', error));
+		
+		// console.log(r);
+
+	};
+	
+	onRouteChange = (route) => {
+		if( route === 'signout') {
+			this.setState({isSignedIn: false})
+		} else if(route === 'home') {
+			this.setState({isSignedIn: true})
+		}
+		this.setState({route: route});
+	}
+	render() {
+		
+		return ( 
+			
+			<div className="tc App">  
+			<ParticlesBg type="cobweb" num="200" color="#ffffff" bg={true} />
+			<Navigation isSignedIn={this.state.isSignedIn} onRouteChange={this.onRouteChange}/>
+			{this.state.route === 'home'
+					?<div>
+						<Logo /> 
+						<Rank />
+						<ImageLinkForm 
+							onInputChange={this.onInputChange} 
+							onButtonSubmit={this.onButtonSubmit}/>
+						<FaceRecognition box={this.state.box} imageURL={this.state.imageURL}/> 
+					</div> 
+
+				: (
+					this.state.route === 'signin'
+						?<SignIn onRouteChange={this.onRouteChange}/>
+						:<Register onRouteChange={this.onRouteChange}/>
+						
+				)
+			}
+			</div>
+	  );
+	}
+	
 }
 
 export default App;
